@@ -1,0 +1,55 @@
+@page "/products"
+@inject HttpClient Http
+
+<h3>Product List</h3>
+@if (errorMessage != null)
+{
+    <div style="color:red; font-weight:bold;">@errorMessage</div>
+}
+<ul>
+    @if (products == null && errorMessage == null)
+    {
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <p class="text-danger">@errorMessage</p>
+    }
+    else
+    {
+        @foreach (var product in products)
+            {
+                <li>@product.Name - $@product.Price (Stock: @product.Stock)</li>
+            }
+    }
+</ul>
+
+
+
+@code {
+    private Product[]? products;
+    private string? errorMessage; 
+
+    protected override async Task OnInitializedAsync()
+    {
+        try 
+        {
+            products = await Http.GetFromJsonAsync<Product[]>("http://localhost:5013/api/products");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Errore nel caricamento: " + ex.Message;
+            Console.WriteLine(ex.Message); 
+        }
+    }
+
+    public class Product
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public double Price { get; set; }
+        public int Stock { get; set; }
+    }
+}
