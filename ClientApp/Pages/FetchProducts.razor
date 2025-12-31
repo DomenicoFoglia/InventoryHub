@@ -1,5 +1,4 @@
 @page "/products"
-
 @using System.Text.Json
 @inject HttpClient Http
 
@@ -7,67 +6,86 @@
 
 @if (errorMessage != null)
 {
+    @* Visualizzazione dell'errore *@
     <div class="alert alert-danger" role="alert">
         @errorMessage
     </div>
 }
-else if (products == null)
+
+@if (products == null && errorMessage == null)
 {
+    @* Stato di caricamento con Spinner *@
     <div class="d-flex align-items-center">
         <div class="spinner-border text-primary me-2" role="status"></div>
         <span>Loading products...</span>
     </div>
 }
-else
+else if (products != null)
 {
-    <ul>
+    @* Visualizzazione della lista prodotti *@
+    <ul class="list-group">
         @foreach (var product in products)
         {
-            <li>
-                <strong>@product.Name</strong> - $@product.Price - Stock: @product.Stock
+            <li class="list-group-item">
+                <strong>@product.Name</strong> - $@product.Price 
                 @if (product.Category != null)
                 {
-                    <em>(Category: @product.Category.Name)</em>
+                    <span class="badge bg-info text-dark ms-2">@product.Category.Name</span>
                 }
+                <div class="text-muted" style="font-size: 0.85rem;">Stock: @product.Stock</div>
             </li>
         }
     </ul>
 }
 
-
-
 @code {
     private Product[]? products;
     private string? errorMessage; 
 
+    // [Ottimizzazione]: Cache statica per evitare chiamate API ridondanti
+    private static Product[]? _cachedProducts; 
+
     protected override async Task OnInitializedAsync()
     {
+        // Se i dati sono già in cache, non chiamare il server
+        if (_cachedProducts != null) 
+        {
+            products = _cachedProducts;
+            return;
+        }
+
         try
         {
-            // 1. Facciamo la richiesta 
-            var response = await Http.GetAsync("http://localhost:5013/api/productlist");
+            // 1. Richiesta al server (usa il BaseAddress configurato in Program.cs)
+            var response = await Http.GetAsync("api/productlist");
             
-            // 2. Controlliamo se il server ha risposto OK (200)
+            // 2. Debugging: controlla se la rotta o il server rispondono OK
             response.EnsureSuccessStatusCode();
 
-            // 3. Leggiamo il contenuto come semplice testo
+            // 3. Legge il JSON come stringa
             var json = await response.Content.ReadAsStringAsync();
 
-            // 4. Proviamo a trasformare il testo in oggetti C#
-            // Se il JSON è sbagliato, qui salta l'eccezione
+            // 4. Deserializzazione con gestione dei nomi (case-insensitive)
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             products = JsonSerializer.Deserialize<Product[]>(json, options);
+
+            // [Ottimizzazione]: Salva nella cache solo se l'operazione è riuscita
+            if (products != null)
+            {
+                _cachedProducts = products;
+            }
         }
         catch (JsonException jex)
         {
+            // Debugging specifico per JSON malformato
             errorMessage = "Errore dati: Il formato ricevuto dal server non è valido.";
             Console.WriteLine($"Dettaglio tecnico JSON: {jex.Message}");
         }
         catch (Exception ex)
         {
-            // Se il JSON è sbagliato o il server è spento, mostriamo l'errore
-            errorMessage = $"Errore di debug: {ex.Message}";
-            Console.WriteLine($"Error: {ex.Message}");
+            // Debugging generico (Server spento, 404, CORS)
+            errorMessage = $"Errore di sistema: {ex.Message}";
+            Console.WriteLine($"Errore di debug: {ex.Message}");
         }
     }
 
