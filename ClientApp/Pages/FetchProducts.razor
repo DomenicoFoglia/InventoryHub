@@ -1,30 +1,38 @@
 @page "/products"
+
+@using System.Text.Json
 @inject HttpClient Http
 
 <h3>Product List</h3>
+
 @if (errorMessage != null)
 {
-    <div style="color:red; font-weight:bold;">@errorMessage</div>
+    <div class="alert alert-danger" role="alert">
+        @errorMessage
+    </div>
 }
-<ul>
-    @if (products == null && errorMessage == null)
-    {
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
-    }
-    else if (errorMessage != null)
-    {
-        <p class="text-danger">@errorMessage</p>
-    }
-    else
-    {
+else if (products == null)
+{
+    <div class="d-flex align-items-center">
+        <div class="spinner-border text-primary me-2" role="status"></div>
+        <span>Loading products...</span>
+    </div>
+}
+else
+{
+    <ul>
         @foreach (var product in products)
-            {
-                <li>@product.Name - $@product.Price (Stock: @product.Stock)</li>
-            }
-    }
-</ul>
+        {
+            <li>
+                <strong>@product.Name</strong> - $@product.Price - Stock: @product.Stock
+                @if (product.Category != null)
+                {
+                    <em>(Category: @product.Category.Name)</em>
+                }
+            </li>
+        }
+    </ul>
+}
 
 
 
@@ -34,14 +42,32 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try 
+        try
         {
-            products = await Http.GetFromJsonAsync<Product[]>("http://localhost:5013/api/products");
+            // 1. Facciamo la richiesta 
+            var response = await Http.GetAsync("http://localhost:5013/api/productlist");
+            
+            // 2. Controlliamo se il server ha risposto OK (200)
+            response.EnsureSuccessStatusCode();
+
+            // 3. Leggiamo il contenuto come semplice testo
+            var json = await response.Content.ReadAsStringAsync();
+
+            // 4. Proviamo a trasformare il testo in oggetti C#
+            // Se il JSON è sbagliato, qui salta l'eccezione
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            products = JsonSerializer.Deserialize<Product[]>(json, options);
+        }
+        catch (JsonException jex)
+        {
+            errorMessage = "Errore dati: Il formato ricevuto dal server non è valido.";
+            Console.WriteLine($"Dettaglio tecnico JSON: {jex.Message}");
         }
         catch (Exception ex)
         {
-            errorMessage = "Errore nel caricamento: " + ex.Message;
-            Console.WriteLine(ex.Message); 
+            // Se il JSON è sbagliato o il server è spento, mostriamo l'errore
+            errorMessage = $"Errore di debug: {ex.Message}";
+            Console.WriteLine($"Error: {ex.Message}");
         }
     }
 
@@ -51,5 +77,12 @@
         public string Name { get; set; } = string.Empty;
         public double Price { get; set; }
         public int Stock { get; set; }
+        public CategoryInfo? Category { get; set; }
+    }
+
+    public class CategoryInfo
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }
